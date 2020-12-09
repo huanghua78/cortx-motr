@@ -45,8 +45,16 @@ struct m0_fab__dom_param {
 	struct fid_domain *fab_domain;  /* Domain fid */
 };
 
-struct libfab_params {
-	struct fid_mr     *mr; 	/* Memory region to be registered */
+/**
+ *    Private data pointed to by m0_net_buffer::nb_xprt_private.
+ * 
+ */
+struct libfab_buf_params {
+        /** Pointer back to the network buffer */
+        struct m0_net_buffer   *xb_nb;  
+        /** libfab memory region */
+        struct fid_mr           *mr;
+
 };
 
 /** @} end of netlibfab group */
