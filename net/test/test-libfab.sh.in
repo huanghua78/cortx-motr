@@ -29,7 +29,7 @@ if [ $1 != "console" -a $1 != "server" -a $1 != "client" ]; then
 	exit
 fi
 
-. /home/743690/work/libfab/test_framework/intergate/cortx-motr/m0t1fs/linux_kernel/st/common.sh
+. @abs_top_srcdir@/m0t1fs/linux_kernel/st/common.sh
 
 unload_all() {
     modunload
@@ -41,10 +41,7 @@ modload_galois
 modload || exit $?
 
 JOB_IDS=
-SCRIPT=/home/743690/work/libfab/test_framework/intergate/cortx-motr/net/test/test-libfab.sh
-
-PID=12345
-PORTAL=42
+SCRIPT=@abs_top_srcdir@/net/test/test-libfab.sh
 
 ROLE=$1
 CONSOLE_CR=$2
@@ -67,7 +64,7 @@ job_id_add() {
 
 run_console() {
         echo "type : $TEST_TYPE msg_nr : $MSG_NR msg_size : $MSG_SIZE con-ser : $CONCUR_SERVER con-cli : $CONCUR_CLIENT"
-	/home/743690/work/libfab/test_framework/intergate/cortx-motr/net/test/user_space/m0nettest \
+	@abs_top_srcdir@/net/test/user_space/m0nettest \
 		-t $TEST_TYPE \
 		-n $MSG_NR \
 		-s $MSG_SIZE \
@@ -83,14 +80,14 @@ run_console() {
 }
 
 run_server() {
-	/home/743690/work/libfab/test_framework/intergate/cortx-motr/net/test/user_space/m0nettestd \
+	@abs_top_srcdir@/net/test/user_space/m0nettestd \
 		-a "$SERVER_IF:200" \
 		-c "$CONSOLE_IF:100" &
 	job_id_add
 }
 
 run_client() {
-	/home/743690/work/libfab/test_framework/intergate/cortx-motr/net/test/user_space/m0nettestd \
+	@abs_top_srcdir@/net/test/user_space/m0nettestd \
 		-a "$CLIENT_IF:300" \
 		-c "$CONSOLE_IF:101" &
 	job_id_add
