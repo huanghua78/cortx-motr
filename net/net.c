@@ -32,6 +32,7 @@
 #include "net/lnet/lnet.h"
 #ifndef __KERNEL__
 #  include "lib/string.h"  /* m0_streq */
+#include "net/libfab/libfab.h"
 #endif
 
 #define M0_TRACE_SUBSYSTEM M0_TRACE_SUBSYS_NET
@@ -64,13 +65,13 @@ struct m0_mutex m0_net_mutex;
 M0_INTERNAL int m0_net_init(void)
 {
 	M0_ENTRY();
-	if (m0_net_xprt_default_get() == NULL) 
-		m0_net_xprt_default_set(&m0_net_lnet_xprt);
-/*
+//	if (m0_net_xprt_default_get() == NULL) 
+//		m0_net_xprt_default_set(&m0_net_lnet_xprt);
+
 #ifndef __KERNEL__
-	m0_net_xprt_default_set(&m0_net_sock_xprt);
+        m0_net_xprt_default_set(&m0_net_libfab_xprt);
+	// m0_net_xprt_default_set(&m0_net_sock_xprt);
 #endif
-*/
 	m0_mutex_init(&m0_net_mutex);
 	return 0;
 }

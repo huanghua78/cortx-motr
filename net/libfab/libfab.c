@@ -61,7 +61,7 @@
 #include "libfab_internal.h"
 #include "lib/types.h"
 #include "lib/memory.h" /*M0_ALLOC_PTR()*/
-// #include "libfab.h"
+#include "libfab.h"
 #include <errno.h>
 
 
@@ -82,6 +82,21 @@ struct transfer_ma {
 #define FAB_MR_OFFSET   0
 #define FAB_MR_FLAG     0
 #define FAB_MR_KEY      0XABCD
+
+M0_INTERNAL int m0_net_libfab_init(void)
+{
+        int result = 0;
+        m0_net_xprt_register(&m0_net_libfab_xprt);
+  //      m0_net_xprt_default_set(&m0_net_libfab_xprt);
+
+        return M0_RC(result);
+}
+
+M0_INTERNAL void m0_net_libfab_fini(void)
+{
+        m0_net_xprt_deregister(&m0_net_libfab_xprt);
+}
+
 
 /** Used as m0_net_xprt_ops::xo_dom_init(). */
 static int libfab_dom_init(struct m0_net_xprt *xprt, struct m0_net_domain *dom)
