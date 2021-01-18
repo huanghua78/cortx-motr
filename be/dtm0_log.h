@@ -24,10 +24,11 @@
 #define __MOTR_BE_DTM0_LOG_H__
 
 /* TODO: Where it will be defined? */
-#define M0_DTM0_MAX_PARTICIPANT 3
+/* REMOVE */
+/* #define M0_DTM0_MAX_PARTICIPANT 3 */
 /**
  *  @page dtm0 log implementation
- *
+*
  *  @section Overview
  *  DTM0 log module will be working on incoming message request, the
  *  goal of this module is to track journaling of incoming message either on
@@ -160,19 +161,53 @@ enum m0_be_dtm0_log_op {
 	M0_DTML_ON_REDO /* TODO: I don't think so it is needed */
 };
 
+
+// NEEDED: 	M0_DTML_ON_REDO: I don't think so it is needed
+// usecase:
+//
+//
+// txr1 = log_getby_id("idxx");
+// txr2 = log_getby_id("idyy");
+//
+//  p1          p2           p3
+//  |           |            |
+//  |           X            |
+//  X           |            |
+//  |           |            |
+//  |            <----REDO---.
+//  |           |            |
+//  |           | txr2={VVP} X
+// ...         ...
+//  |           | txr2={VPP}
+//  |<--REDO----.
+//  |           |
+//  X           |
+//  |           |
+//  .----PERS-->| txr2={PPP}
+//  |
+//  | txr1={PPV}
+
+
 struct m0_be_dtm0_log {
-	struct m0_mutex   lock;  /* volatile structure */
-	struct m0_be_list list;  /* persistent structure */
-	struct m0_list    vlist; /* Volatile list */
+	struct m0_mutex    lock;  /* volatile structure */
+	struct m0_be_list *list;  /* persistent structure */
+	struct m0_list     vlist; /* Volatile list */
 };
 
 /* Unique identifier for request */
+// define comparison operator for this function
+//
+//  0  -- if left == right
+// -1  -- if left <  right
+//  1  -- if left >  right
+// int cmp(struct m0_dtm0_dtx_id* left, struct m0_dtm0_dtx_id *right);
+//
 struct m0_dtm0_dtx_id {
 	struct m0_fid   fid;
 	uint64_t        clock_id;
 };
 
-struct m0_dtm0_log_participant_list {
+struct m0_dtm0_log_participant {
 	struct m0_fid                      pfid;
 	enum m0_dtm0_log_participant_state pstate;
 };
@@ -182,14 +217,19 @@ struct m0_dtm0_txr {
 	struct m0_dtm0_dtx_id                tid;
 	/*TODO: Should this be bufvec or something or static is fine? */
 	/* variable */
-	struct m0_dtm0_log_participant_list  plist[M0_DTM0_MAX_PARTICIPANT];
+	/* struct m0_dtm0_log_participant_list  plist[M0_DTM0_MAX_PARTICIPANT]; */
+
+	struct m0_dtm0_log_participant      *participants;
+	uint16_t                             participants_nr;
+
 	struct m0_buf                        txr_payload;
 };
 
 /* DTM0 log specific wraper for txr */
 struct m0_dtm0_log_record {
 	struct m0_dtm0_txr txr;
-	/* list pointers */
+	/* link into m0_be_dtm0_log::list */
+	struct m0_be_list_link dlr_link;
 };
 
 // init/fini (for volatile fields)
@@ -201,7 +241,7 @@ M0_INTERNAL void m0_be_dtm0_log_credit(enum m0_be_dtm0_log_op optype,
 				       m0_bcount_t             nr,
 				       struct m0_be_tx_credit *accum);
 // create/destroy
-M0_INTERNAL struct m0_be_dtm0_log * m0_be_dtm0_log_create(struct m0_be_tx *tx);
+M0_INTERNAL struct m0_be_dtm0_log *m0_be_dtm0_log_create(struct m0_be_tx *tx);
 
 M0_INTERNAL void m0_be_dtm0_log_destroy(struct m0_be_dtm0_log **log,
 					struct m0_be_tx        *tx);

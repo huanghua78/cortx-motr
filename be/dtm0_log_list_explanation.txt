@@ -1,0 +1,74 @@
+
+struct link {
+	struct link *next;
+	uint64 magic;
+	/* void        *data; */
+};
+
+struct list {
+	struct link *head;
+	struct link *tail;
+};
+
+
+struct list_element {
+	int a;
+	char b;
+
+	struct link link;
+	struct link link2;
+};
+
+TL_DEFINE(list_element::link, "list_element_type");
+
+/* void list_add(list* l, list_element *le) */
+void list_add(list* l, list_link *link)
+{
+	/* struct link *link = alloc(); */
+	/* link->data = le; */
+
+	if (head == tail) {
+	} else {
+		assert(tail->next == NULL);
+		tail->next = link;
+	}
+
+}
+
+void list(struct list *list)
+{
+	list.head = NULL;
+	list.tail = NULL;
+}
+
+void list_element_init(struct link* l) {
+	l->magic = 0x33DDDDDD77;
+}
+
+
+void *type_cast(const char *type, struct link *link) {
+	link_offset = g_list_types.find_offset(type);
+	assert(link_offset > 0);
+	return link - link_offset;
+}
+
+foo()
+{
+	struct list l;
+	struct list_element le = { .a = 10 };
+
+	list_element_init(&le);
+
+	list(&l);
+	list_add(&l, &le.link);
+	list_add(&l, &le.link);
+	list_add(&l, &le.link);
+	list_add(&l, &le.link);
+
+	for (struct link *link = l.head; link != NULL; link = link->next) {
+		assert(link->magic == 0x33DDDDDD77);
+		/* struct list_element *element = (struct list_element*) link; */
+		struct list_element *element = type_cast("list_element", link);
+		printf("%d\n", element->a);
+	}
+}
