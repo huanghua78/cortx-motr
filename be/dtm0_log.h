@@ -37,7 +37,9 @@
  *  decide which of the logged messages needs to be sent as a redo to request.
  *
  *  During normal operation when every participant and originator is online
- *  every transaction state is logged and it could be any of the following,
+ *  every transaction will be logged and at any point state of request can be
+ *  any of the following,
+ *
  *	enum m0_dtm0_log_participant_state {
  *		M0_DTML_STATE_UNKNOWN,
  *		M0_DTML_STATE_SENT,
@@ -45,11 +47,15 @@
  *		M0_DTML_STATE_PERSISTENT,
  *	};
  *
- *  Every participant maintains the state of it's own transaction which can be
- *  M0_DTML_STATE_EXECUTED or M0_DTML_STATE_PERSISTENT as well as
- *  state of other participant which can be either M0_DTML_STATE_UNKNOWN or
- *  M0_DTML_STATE_PERSISTENT
+ *  Every participant maintains the journal record corresponds to each
+ *  transaction and it can be described by "struct m0_dtm0_log_record" which
+ *  will be stored in persistent storage. Basically this record will maintain
+ *  txr id, state of transaction on all the participant and payload. The state
+ *  of participant which is adding log can be M0_DTML_STATE_EXECUTED or
+ *  M0_DTML_STATE_PERSISTENT as well as state of other participant which can be
+ *  either M0_DTML_STATE_UNKNOWN or M0_DTML_STATE_PERSISTENT.
  *
+ *  Originator also maintains the same transaction record in volatile memory.
  *  On originator the state of the transaction can be M0_DTML_STATE_UNKNOWN to
  *  M0_DTML_STATE_PERSISTENT for each participant.
  *
@@ -75,6 +81,7 @@
  *
  *    log_tx_credit(cred)
  *    tx_open(tx, cred);
+ *    m0_be_dtm0_log_init(l);
  *    if (!log_already_present) {
  *	l = log_create(tx);
  *      txr = m0_be_dtm0_log_find(l, tx_id);
@@ -83,6 +90,7 @@
  *    }
  *    ...
  *    log_update(l, tx, M0_DTML_STATE_EXECUTED, (struct txr*){ ... });
+ *    m0_be_dtm0_log_fini(l);
  *    tx_close(tx);
  * }
  *
@@ -96,17 +104,19 @@
  *    log_tx_credit(cred)
  *    tx_open(tx, cred);
  *
+ *    m0_be_dtm0_log_init(l);
  *    txr = m0_be_dtm0_log_find(l, tx_id);
  *
  *    ...
  *    log_update(l, tx, M0_DTML_STATE_PERSISTENT, (struct txr*){ ... });
+ *    m0_be_dtm0_log_fini(l);
  *    tx_close(tx);
  * }
  *
  * 3. When transaction become persistent on other participant, corresponding
  *    state of participant in journal log will be updated.
  *    If log is not present the it will create the log and update the state,
- *    rest of the informatin will be invalid
+ *    rest of the information will be invalid
  *    TODO: What about txr payload it will also be invalid, as persistent
  *    message do not contains the txr payload?
  *
@@ -118,6 +128,7 @@
  *    log_tx_credit(cred)
  *    tx_open(tx, cred);
  *
+ *    m0_be_dtm0_log_init(l);
  *    if (!log_already_present) {
  *	l = log_create(tx);
  *      txr = m0_be_dtm0_log_find(l, tx_id);
@@ -126,8 +137,11 @@
  *    }
  *
  *    log_update(l, tx, M0_DTML_STATE_PERSISTENT, (struct txr*){ ... });
+ *    m0_be_dtm0_log_fini(l);
  *    tx_close(tx);
  * }
+ *
+ * @section Dependencies
  */
 
 /* Participant state */
@@ -167,6 +181,7 @@ struct m0_dtm0_log_participant_list {
 struct m0_dtm0_txr {
 	struct m0_dtm0_dtx_id                tid;
 	/*TODO: Should this be bufvec or something or static is fine? */
+	/* variable */
 	struct m0_dtm0_log_participant_list  plist[M0_DTM0_MAX_PARTICIPANT];
 	struct m0_buf                        txr_payload;
 };
@@ -174,6 +189,7 @@ struct m0_dtm0_txr {
 /* DTM0 log specific wraper for txr */
 struct m0_dtm0_log_record {
 	struct m0_dtm0_txr txr;
+	/* list pointers */
 };
 
 // init/fini (for volatile fields)
