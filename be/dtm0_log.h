@@ -23,23 +23,20 @@
 #ifndef __MOTR_BE_DTM0_LOG_H__
 #define __MOTR_BE_DTM0_LOG_H__
 
-/* TODO: Where it will be defined? */
-/* REMOVE */
-/* #define M0_DTM0_MAX_PARTICIPANT 3 */
 /**
  *  @page dtm0 log implementation
-*
+ *
  *  @section Overview
  *  DTM0 log module will be working on incoming message request, the
  *  goal of this module is to track journaling of incoming message either on
  *  persistent or volatile memory based on whether logging is happening on
  *  participant or on originator, so that in the phase failure consistency of
  *  failed participant can be restored by iterating over logged journal to
- *  decide which of the logged messages needs to be sent as a redo to request.
+ *  decide which of the logged messages needs to be sent as a redo request.
  *
  *  During normal operation when every participant and originator is online
- *  every transaction will be logged and at any point state of request can be
- *  any of the following,
+ *  every transaction will be logged and at any point state of transaction can
+ *  be any of the following,
  *
  *	enum m0_dtm0_log_participant_state {
  *		M0_DTML_STATE_UNKNOWN,
@@ -51,29 +48,38 @@
  *  Every participant maintains the journal record corresponds to each
  *  transaction and it can be described by "struct m0_dtm0_log_record" which
  *  will be stored in persistent storage. Basically this record will maintain
- *  txr id, state of transaction on all the participant and payload. The state
- *  of participant which is adding log can be M0_DTML_STATE_EXECUTED or
- *  M0_DTML_STATE_PERSISTENT as well as state of other participant which can be
- *  either M0_DTML_STATE_UNKNOWN or M0_DTML_STATE_PERSISTENT.
+ *  txr id, state of transaction on all the participant and payload.
+ *
+ *  The state of transaction for which participant is adding log can be
+ *  M0_DTML_STATE_EXECUTED or M0_DTML_STATE_PERSISTENT. For the same transaction
+ *  state of remote participant can be either M0_DTML_STATE_UNKNOWN or
+ *  M0_DTML_STATE_PERSISTENT, this is because remote participant will only send
+ *  state of it's transaction to the other participant when transaction become
+ *  persistent.
  *
  *  Originator also maintains the same transaction record in volatile memory.
+ *  Originator is expecting to get replys from participant when transaction on
+ *  participant is M0_DTML_STATE_EXECUTED or M0_DTML_STATE_PERSISTENT.
  *  On originator the state of the transaction can be M0_DTML_STATE_UNKNOWN to
- *  M0_DTML_STATE_PERSISTENT for each participant.
+ *  M0_DTML_STATE_PERSISTENT for each participant. O
  *
- *  During recovery operation of any of the participant rest of the participant
+ *  During recovery operation of any of the participant, rest of the participant
  *  and originator will iterate over the logged journal and extract the state
  *  of each transation for participant under recovery from logged information
  *  and will send redo request for those transaction which  are not
  *  M0_DTML_STATE_PERSISTENT on participant being recovered.
  *
+ *  Upon receiving redo request participant under recovery will log the state
+ *  of same transaction of remote participant in persistent store.
+ *
  * @section Usecases
  *
- * 1. When transaction successfully executed on participant, log should be
- *    added with transaction state M0_DTML_STATE_EXECUTED by participant, if
- *    log is added first time then state for same tx on remote participant will
- *    be logged as M0_DTML_STATE_UNKNOWN by this participant and later upon
- *    getting persistent notice from remote participant appropriate state for
- *    particular participant will be updated.
+ * 1. When transaction successfully executed on participant, DTM0 log will be
+ *    added by participant to persistent store and state of transaction will be
+ *    M0_DTML_STATE_EXECUTED, if log is create first time then state for same
+ *    transaction for remote participant will be logged as M0_DTML_STATE_UNKNOWN
+ *    later upon getting persistent notice from remote participant appropriate
+ *    state for particular participant will be updated.
  *
  * {
  *    struct log*   l;
@@ -82,7 +88,7 @@
  *
  *    log_tx_credit(cred)
  *    tx_open(tx, cred);
- *    m0_be_dtm0_log_init(l);
+ *
  *    if (!log_already_present) {
  *	l = log_create(tx);
  *      txr = m0_be_dtm0_log_find(l, tx_id);
@@ -91,12 +97,13 @@
  *    }
  *    ...
  *    log_update(l, tx, M0_DTML_STATE_EXECUTED, (struct txr*){ ... });
- *    m0_be_dtm0_log_fini(l);
  *    tx_close(tx);
  * }
  *
- * 2. When transaction become persistent on participant, the state of the tx
- *    will be updated as M0_DTML_STATE_PERSISTENT
+ * 2. When transaction become persistent on particular participant, the state
+ *    of the transaction for this participant will be updated as
+ *    M0_DTML_STATE_PERSISTENT.
+ *
  * {
  *    struct log*   l;
  *    struct be_tx* tx;
@@ -105,21 +112,25 @@
  *    log_tx_credit(cred)
  *    tx_open(tx, cred);
  *
- *    m0_be_dtm0_log_init(l);
  *    txr = m0_be_dtm0_log_find(l, tx_id);
  *
  *    ...
  *    log_update(l, tx, M0_DTML_STATE_PERSISTENT, (struct txr*){ ... });
- *    m0_be_dtm0_log_fini(l);
  *    tx_close(tx);
  * }
  *
- * 3. When transaction become persistent on other participant, corresponding
- *    state of participant in journal log will be updated.
- *    If log is not present the it will create the log and update the state,
- *    rest of the information will be invalid
- *    TODO: What about txr payload it will also be invalid, as persistent
- *    message do not contains the txr payload?
+ * 3. When transaction become persistent on remote participant, it will send the
+ *    persistent notice to rest of the participant and originator stating that
+ *    transaction is persistent on it's store. Upon receiving this message each
+ *    of participant and originators will update the state of transaction for
+ *    remote participant as M0_DTML_STATE_PERSISTENT.
+ *
+ *    If persistent message from remote participant arrives before receiving
+ *    participant or originator has logged the same transaction on it's
+ *    persistent/volatile store then with this event log will be created and
+ *    remote participant state and txr id will be logged but txr payload will
+ *    be invalid as persistent message from remote participant does not carry
+ *    payload.
  *
  * {
  *    struct log*   l;
@@ -129,7 +140,6 @@
  *    log_tx_credit(cred)
  *    tx_open(tx, cred);
  *
- *    m0_be_dtm0_log_init(l);
  *    if (!log_already_present) {
  *	l = log_create(tx);
  *      txr = m0_be_dtm0_log_find(l, tx_id);
@@ -138,11 +148,9 @@
  *    }
  *
  *    log_update(l, tx, M0_DTML_STATE_PERSISTENT, (struct txr*){ ... });
- *    m0_be_dtm0_log_fini(l);
  *    tx_close(tx);
  * }
  *
- * @section Dependencies
  */
 
 /* Participant state */
@@ -158,50 +166,12 @@ enum m0_be_dtm0_log_op {
 	M0_DTML_ON_SENT,
 	M0_DTML_ON_EXECUTED,
 	M0_DTML_ON_PERSISTENT,
-	M0_DTML_ON_REDO /* TODO: I don't think so it is needed */
+	M0_DTML_ON_REDO
 };
 
 
-// NEEDED: 	M0_DTML_ON_REDO: I don't think so it is needed
-// usecase:
-//
-//
-// txr1 = log_getby_id("idxx");
-// txr2 = log_getby_id("idyy");
-//
-//  p1          p2           p3
-//  |           |            |
-//  |           X            |
-//  X           |            |
-//  |           |            |
-//  |            <----REDO---.
-//  |           |            |
-//  |           | txr2={VVP} X
-// ...         ...
-//  |           | txr2={VPP}
-//  |<--REDO----.
-//  |           |
-//  X           |
-//  |           |
-//  .----PERS-->| txr2={PPP}
-//  |
-//  | txr1={PPV}
-
-
-struct m0_be_dtm0_log {
-	struct m0_mutex    lock;  /* volatile structure */
-	struct m0_be_list *list;  /* persistent structure */
-	struct m0_list     vlist; /* Volatile list */
-};
 
 /* Unique identifier for request */
-// define comparison operator for this function
-//
-//  0  -- if left == right
-// -1  -- if left <  right
-//  1  -- if left >  right
-// int cmp(struct m0_dtm0_dtx_id* left, struct m0_dtm0_dtx_id *right);
-//
 struct m0_dtm0_dtx_id {
 	struct m0_fid   fid;
 	uint64_t        clock_id;
@@ -212,24 +182,34 @@ struct m0_dtm0_log_participant {
 	enum m0_dtm0_log_participant_state pstate;
 };
 
-// define in a separate header?
+/* TODO: define in a separate header. */
 struct m0_dtm0_txr {
-	struct m0_dtm0_dtx_id                tid;
-	/*TODO: Should this be bufvec or something or static is fine? */
-	/* variable */
-	/* struct m0_dtm0_log_participant_list  plist[M0_DTM0_MAX_PARTICIPANT]; */
-
-	struct m0_dtm0_log_participant      *participants;
-	uint16_t                             participants_nr;
-
-	struct m0_buf                        txr_payload;
+	struct m0_dtm0_dtx_id           dt_tid;
+	struct m0_dtm0_log_participant *dt_participants;
+	uint16_t                        dt_participants_nr;
+	struct m0_buf                   dt_txr_payload;
 };
 
-/* DTM0 log specific wraper for txr */
+struct m0_be_dtm0_list_link {
+	uin64_t magic;
+	struct m0_be_dtm0_list_link *next;
+};
+
 struct m0_dtm0_log_record {
-	struct m0_dtm0_txr txr;
+	struct m0_dtm0_txr dlr_txr;
 	/* link into m0_be_dtm0_log::list */
 	struct m0_be_list_link dlr_link;
+};
+
+struct m0_be_dtm0_list {
+	struct m0_be_list_link *dl_head;
+	struct m0_be_list_link *dl_tail;
+}
+
+struct m0_be_dtm0_log {
+	struct m0_mutex         dl_lock;  /* volatile structure */
+	struct m0_be_dtm0_list *dl_list;  /* persistent structure */
+	struct m0_dtm0_list    *dl_vlist; /* Volatile list */
 };
 
 // init/fini (for volatile fields)
@@ -252,7 +232,13 @@ M0_INTERNAL void m0_be_dtm0_log_update(struct m0_be_dtm0_log     *log,
 				       enum m0_dtm0_log_operation op,
 				       struct m0_dtm0_txr        *txr);
 
-
 M0_INTERNAL struct m0_dtm0_txr *m0_be_dtm0_log_find(struct m0_be_dtm0_log *log,
 						    struct m0_dtm0_dtx_id *id);
+/*
+ *       0  -- if left == right
+ *      -1  -- if left <  right
+ *       1  -- if left >  right
+ */
+M0_INTERNAL int m0_dtm0_cmp_dtx_id(struct m0_dtm0_dtx_id* left,
+				   struct m0_dtm0_dtx_id *right);
 #endif /* __MOTR_BE_DTM0_LOG_H__ */
