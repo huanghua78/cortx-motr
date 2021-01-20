@@ -169,8 +169,6 @@ enum m0_be_dtm0_log_op {
 	M0_DTML_ON_REDO
 };
 
-
-
 /* Unique identifier for request */
 struct m0_dtm0_dtx_id {
 	struct m0_fid   fid;
@@ -191,19 +189,18 @@ struct m0_dtm0_txr {
 };
 
 struct m0_be_dtm0_list_link {
-	uin64_t magic;
-	struct m0_be_dtm0_list_link *next;
+	uin64_t                      dll_magic;
+	struct m0_be_dtm0_list_link *dll_next;
 };
 
 struct m0_dtm0_log_record {
-	struct m0_dtm0_txr dlr_txr;
-	/* link into m0_be_dtm0_log::list */
-	struct m0_be_list_link dlr_link;
+	struct m0_dtm0_txr          dlr_txr;
+	struct m0_be_dtm0_list_link dlr_link; /* link into m0_be_dtm0_log::list */
 };
 
 struct m0_be_dtm0_list {
-	struct m0_be_list_link *dl_head;
-	struct m0_be_list_link *dl_tail;
+	struct m0_be_dtm0_list_link *dl_head;
+	struct m0_be_dtm0_list_link *dl_tail;
 }
 
 struct m0_be_dtm0_log {
